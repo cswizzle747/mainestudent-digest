@@ -1,8 +1,10 @@
 # eventbrite.py
 # Scrapes events from Eventbrite website near Portland, ME
+# Now visits each event page to get venue info!
 
 import requests
 import json
+import time
 from bs4 import BeautifulSoup
 
 # --- SETTINGS ---
@@ -37,19 +39,69 @@ KEEP_WORDS = [
     "portland", "brunswick", "freeport", "maine",
 ]
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/120.0.0.0 Safari/537.36"
+}
+
+
+# --- HELPER: GET VENUE FROM INDIVIDUAL EVENT PAGE ---
+
+def get_venue_from_event_page(event_url):
+    try:
+        time.sleep(1)  # be polite, don't hammer their server
+        response = requests.get(event_url, headers=HEADERS)
+        if response.status_code != 200:
+            return "", ""
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Check structured data on the event page
+        scripts = soup.find_all("script", type="application/ld+json")
+        for script in scripts:
+            try:
+                data = json.loads(script.string)
+
+                # Sometimes it's nested in a list
+                if isinstance(data, list):
+                    for item in data:
+                        if item.get("@type") == "Event":
+                            data = item
+                            break
+
+                if isinstance(data, dict) and data.get("@type") == "Event":
+                    location = data.get("location", {})
+                    if isinstance(location, dict):
+                        venue = location.get("name", "")
+                        address = location.get("address", {})
+                        if isinstance(address, dict):
+                            city = address.get("addressLocality", "")
+                        else:
+                            city = ""
+                        if venue:
+                            return venue, city
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+        # Fallback: look for location in meta tags
+        meta_location = soup.find("meta", {"property": "event:location:name"})
+        if meta_location:
+            return meta_location.get("content", ""), ""
+
+        # If we still can't find it, return empty (not unknown)
+        return "", ""
+
+    except Exception:
+        return "", ""
+
 
 # --- MAIN FUNCTION ---
 
 def get_events():
     print("📡 Fetching from Eventbrite...")
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/120.0.0.0 Safari/537.36"
-    }
-
-    response = requests.get(SEARCH_URL, headers=headers)
+    response = requests.get(SEARCH_URL, headers=HEADERS)
     if response.status_code != 200:
         print(f"   ❌ Eventbrite error: {response.status_code}")
         return []
@@ -80,7 +132,7 @@ def get_events():
                 if title and len(title) > 5:
                     events_found.append({
                         "name": title,
-                        "url": href if href.startswith("http") else f"https://www.eventbrite.com{href}",
+                        "url": href if href.startswith("http") else "https://www.eventbrite.com" + href,
                         "raw": True
                     })
 
@@ -108,37 +160,34 @@ def get_events():
 
         seen.add(name)
 
+        # Get date from search page data
         if not event.get("raw"):
             start_date = event.get("startDate", "")
-            location = event.get("location", {})
-            if isinstance(location, dict):
-                venue_name = location.get("name", "Unknown venue")
-                address = location.get("address", {})
-                city = address.get("addressLocality", "") if isinstance(address, dict) else ""
-            else:
-                venue_name = "Unknown venue"
-                city = ""
-
             if "T" in str(start_date):
                 date = start_date.split("T")[0]
-                time = start_date.split("T")[1][:5]
+                time_val = start_date.split("T")[1][:5]
             else:
                 date = start_date
-                time = ""
-
-            events.append({
-                "name": name, "date": date, "time": time,
-                "venue": venue_name, "city": city,
-                "category": "", "price": "",
-                "url": event.get("url", ""), "source": "Eventbrite"
-            })
+                time_val = ""
         else:
-            events.append({
-                "name": name, "date": "", "time": "",
-                "venue": "", "city": "",
-                "category": "", "price": "",
-                "url": event.get("url", ""), "source": "Eventbrite"
-            })
+            date = ""
+            time_val = ""
+
+        # Now visit the individual event page to get the venue
+        print(f"   🔍 Getting venue for: {name[:50]}...")
+        venue_name, venue_city = get_venue_from_event_page(event_url)
+
+        events.append({
+            "name": name,
+            "date": date,
+            "time": time_val,
+            "venue": venue_name if venue_name and "autocomplete" not in venue_name else "See link for details",
+            "city": venue_city,
+            "category": "",
+            "price": "",
+            "url": event_url,
+            "source": "Eventbrite"
+        })
 
     print(f"   ✅ Got {len(events)} events from Eventbrite")
     return events
@@ -147,4 +196,7 @@ def get_events():
 if __name__ == "__main__":
     events = get_events()
     for event in events:
-        print(f"🎪 {event['name']} — {event['date']}")
+        print(f"🎪 {event['name']}")
+        print(f"   📍 {event['venue']}, {event['city']}")
+        print(f"   📅 {event['date']}")
+        print()
