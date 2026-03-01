@@ -1,0 +1,50 @@
+name: Update Event Digest
+
+# Run every Monday at 8am Eastern Time
+on:
+  schedule:
+    - cron: '0 13 * * 1'
+  
+  # Also lets you run it manually from GitHub
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Get our code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Step 3: Install our libraries
+      - name: Install dependencies
+        run: |
+          pip install requests python-dotenv beautifulsoup4
+
+      # Step 4: Create .env file from secrets
+      - name: Create .env file
+        run: |
+          echo "TICKETMASTER_API_KEY=${{ secrets.TICKETMASTER_API_KEY }}" >> .env
+          echo "EVENTBRITE_API_KEY=${{ secrets.EVENTBRITE_API_KEY }}" >> .env
+          echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
+
+      # Step 5: Run our script
+      - name: Build the site
+        run: |
+          python build_site.py
+
+      # Step 6: Push the updated site
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add docs/
+          git diff --staged --quiet || git commit -m "Weekly digest update"
+          git push
