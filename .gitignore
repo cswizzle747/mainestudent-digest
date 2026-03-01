@@ -1,0 +1,8 @@
+.env
+venv/
+.venv/
+__pycache__/
+*.pyc
+events_*.json
+weekly_digest_*.txt
+brunswick_raw.html
