@@ -73,6 +73,10 @@ Please create an engaging weekly digest with these rules:
 6. Skip irrelevant or non-college-student events
 7. Start with a quick intro paragraph
 8. End with a Dont Miss top 3 section
+9. IMPORTANT: Keep the total digest to around 15-20 events MAX
+10. Only include events that a college student would actually want to go to
+11. If there are multiple similar sports games, just mention the sport once and list the dates
+12. Combine recurring weekly events into one mention (e.g. "Every Wednesday: Bingo at Social Goose")
 
 Output ONLY the HTML content. No markdown. No code fences."""
 

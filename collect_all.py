@@ -32,7 +32,25 @@ def collect_all_events():
 
     # Sort by date
     all_events.sort(key=lambda x: x.get("date", "9999-99-99"))
-    return all_events
+
+    # Remove duplicates across all sources
+    # Same name (or very similar) = duplicate
+    seen = set()
+    unique_events = []
+
+    for event in all_events:
+        # Create a simple version of the name for comparison
+        simple_name = event["name"].lower().strip()
+        simple_name = simple_name.replace("the ", "")
+        simple_name = simple_name.replace("  ", " ")
+
+        # Check if we've seen this event name already
+        if simple_name in seen:
+            continue
+        seen.add(simple_name)
+        unique_events.append(event)
+
+    return unique_events
 
 
 # --- ONLY RUNS IF YOU RUN THIS FILE DIRECTLY ---
